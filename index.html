@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PARK ESCAPE - スマホ＆PC対応版</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: rgba(18, 26, 43, 0.75);
+            --panel-border: rgba(255, 255, 255, 0.12);
+            --gold: #f39c12;
+            --gold-glow: rgba(243, 156, 18, 0.5);
+            --danger: #e74c3c;
+            --text-light: #f8f9fa;
+            --accent-green: #2ecc71;
+            --accent-purple: #9b59b6;
+        }
+
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            user-select: none; 
+            -webkit-user-select: none;
+            touch-action: none; /* スマホの画面ズームやスクロールを無効化 */
+        }
+
+        body {
+            background: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 50%, #1a2536 0%, #0b0f19 100%);
+            color: var(--text-light);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 720px;
+            max-height: 520px;
+            background: #14231a;
+            border: 2px solid rgba(46, 204, 113, 0.3);
+            border-radius: 18px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(46, 204, 113, 0.15);
+            overflow: hidden;
+        }
+
+        @media (max-width: 720px) {
+            #game-container {
+                border-radius: 0;
+                border: none;
+                height: 100dvh;
+            }
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* HUD Structure */
+        #hud {
+            position: absolute;
+            top: 14px; left: 14px; right: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 8px 14px;
+            border-radius: 12px;
+            backdrop-filter: blur(12px);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Active Item Button */
+        #item-btn {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            width: 76px;
+            height: 76px;
+            background: radial-gradient(circle, rgba(243, 156, 18, 0.9) 0%, rgba(211, 84, 0, 0.95) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 30;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 15px var(--gold-glow);
+            transition: transform 0.15s ease;
+        }
+
+        #item-btn:active { transform: scale(0.9); }
+        #item-btn-icon { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+        #item-btn-label { font-size: 9px; color: #fff; font-weight: 800; margin-top: 2px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        /* Joystick for Mobile */
+        #joystick-zone {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            z-index: 30;
+            display: none; /* スマホ時のみ表示 */
+        }
+
+        #joystick-base {
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            backdrop-filter: blur(4px);
+        }
+
+        #joystick-stick {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 50px; height: 50px;
+            margin-top: -25px; margin-left: -25px;
+            background: rgba(46, 204, 113, 0.8);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+
+        /* Overlays & Modals */
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 15, 25, 0.94);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            padding: 16px;
+            animation: fadeIn 0.3s ease-out;
+            overflow-y: auto;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+        .hidden { display: none !important; }
+
+        h1 { font-size: 28px; color: #fff; text-shadow: 0 0 20px rgba(46, 204, 113, 0.6); margin-bottom: 4px; letter-spacing: 2px; }
+        h2.gameover-title { font-size: 32px; color: var(--danger); text-shadow: 0 0 25px rgba(231, 76, 60, 0.8); margin-bottom: 8px; font-weight: 900; }
+        p.desc { color: #a4b0be; margin-bottom: 10px; font-size: 11px; text-align: center; line-height: 1.4; max-width: 520px; }
+
+        .item-guide-panel {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 480px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+        }
+
+        .guide-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--gold);
+            text-align: center;
+            margin-bottom: 6px;
+            border-bottom: 1px dashed rgba(255,255,255,0.15);
+            padding-bottom: 4px;
+        }
+
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            text-align: center;
+        }
+
+        .item-card {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 6px;
+            padding: 4px 2px;
+        }
+
+        .item-card-icon { font-size: 16px; margin-bottom: 2px; }
+        .item-card-name { font-size: 9px; font-weight: bold; color: #fff; margin-bottom: 2px; }
+        .item-card-desc { font-size: 7px; color: #a4b0be; line-height: 1.1; }
+
+        .ranking-panel {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 320px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+        }
+
+        .ranking-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--gold);
+            text-align: center;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 4px;
+        }
+
+        .ranking-list { list-style: none; font-size: 10px; }
+        .ranking-item { display: flex; justify-content: space-between; margin-bottom: 3px; color: #dcdde1; font-weight: 600; }
+        .ranking-item.top1 { color: var(--gold); font-weight: 800; }
+
+        .btn {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: #fff;
+            border: none;
+            padding: 10px 32px;
+            border-radius: 30px;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 14px;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 20px rgba(46, 204, 113, 0.4);
+        }
+
+        .btn:hover { transform: scale(1.03); }
+        .btn-retry { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="canvas" width="720" height="520"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-panel">
+            <span>🌰</span>
+            <span id="score-text" style="color: var(--gold);">0</span>
+        </div>
+        <div class="hud-panel">
+            <span id="status-text" style="color: var(--accent-green);">逃げ切れ！</span>
+        </div>
+        <div class="hud-panel">
+            <span>⏱️</span>
+            <span id="time-text">0s</span>
+        </div>
+    </div>
+
+    <!-- Active Item Button -->
+    <div id="item-btn" onclick="useHeldItem()">
+        <div id="item-btn-icon">📦</div>
+        <div id="item-btn-label">P / TAP</div>
+    </div>
+
+    <!-- Mobile Virtual Joystick Zone -->
+    <div id="joystick-zone">
+        <div id="joystick-base"></div>
+        <div id="joystick-stick"></div>
+    </div>
+
+    <!-- Start Overlay -->
+    <div id="start-modal" class="overlay">
+        <h1>PARK ESCAPE</h1>
+        <p class="desc">PC: [WASD/矢印] 移動 ｜ [Pキー] アイテム<br>スマホ: 画面左側スライドで移動 ｜ 右下ボタンでアイテム使用</p>
+        
+        <div class="item-guide-panel">
+            <div class="guide-title">🎁 アイテム図鑑</div>
+            <div class="item-grid">
+                <div class="item-card">
+                    <div class="item-card-icon">🍌</div>
+                    <div class="item-card-name">バナナ</div>
+                    <div class="item-card-desc">罠を設置し鬼を3秒足止め</div>
+                </div>
+                <div class="item-card">
+                    <div class="item-card-icon">👟</div>
+                    <div class="item-card-name">シューズ</div>
+                    <div class="item-card-desc">移動速度がアップ</div>
+                </div>
+                <div class="item-card">
+                    <div class="item-card-icon">📣</div>
+                    <div class="item-card-name">メガホン</div>
+                    <div class="item-card-desc">周囲の鬼を吹き飛ばす</div>
+                </div>
+                <div class="item-card">
+                    <div class="item-card-icon">✨</div>
+                    <div class="item-card-name">マント</div>
+                    <div class="item-card-desc">4秒透明化</div>
+                </div>
+                <div class="item-card">
+                    <div class="item-card-icon">🧲</div>
+                    <div class="item-card-name">マグネット</div>
+                    <div class="item-card-desc">場のどんぐりを一括回収</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ranking-panel">
+            <div class="ranking-title">🏆 TOP RECORD</div>
+            <ol class="ranking-list" id="ranking-list-container">
+                <li class="ranking-item">記録なし</li>
+            </ol>
+        </div>
+
+        <button class="btn" onclick="startGame()">GAME START</button>
+    </div>
+
+    <!-- Gameover Overlay -->
+    <div id="gameover-modal" class="overlay hidden">
+        <h2 class="gameover-title">GAME OVER</h2>
+        <p class="desc" id="gameover-stats" style="font-size: 14px; color: #fff;">
+            回収どんぐり: 0 個<br>生存時間: 0 秒
+        </p>
+
+        <div class="ranking-panel">
+            <div class="ranking-title">🏆 TOP RECORD</div>
+            <ol class="ranking-list" id="gameover-ranking-list-container">
+                <li class="ranking-item">記録なし</li>
+            </ol>
+        </div>
+
+        <button class="btn btn-retry" onclick="startGame()">RETRY</button>
+    </div>
+</div>
+
+<script>
+let canvas, ctx;
+
+const ITEMS = {
+    BANANA: { id: 'BANANA', name: 'バナナの皮', icon: '🍌' },
+    SHOES: { id: 'SHOES', name: 'ダッシュ', icon: '👟' },
+    MEGAPHONE: { id: 'MEGAPHONE', name: 'メガホン', icon: '📣' },
+    CLOAK: { id: 'CLOAK', name: '透明マント', icon: '✨' },
+    MAGNET: { id: 'MAGNET', name: 'マグネット', icon: '🧲' }
+};
+
+const OBSTACLES = [
+    { x: 360, y: 260, radius: 46, name: 'GYM', type: 'gym' },
+    { x: 160, y: 130, radius: 32, name: 'TREE', type: 'tree' },
+    { x: 560, y: 130, radius: 32, name: 'TREE', type: 'tree' },
+    { x: 160, y: 390, radius: 32, name: 'TREE', type: 'tree' },
+    { x: 560, y: 390, radius: 32, name: 'TREE', type: 'tree' },
+    { x: 360, y: 100, radius: 18, name: 'BENCH', type: 'bench' },
+    { x: 360, y: 420, radius: 18, name: 'BENCH', type: 'bench' }
+];
+
+let gameState = {
+    running: false,
+    time: 0,
+    score: 0,
+    feverTime: 0,
+    speedBoostTime: 0,
+    stealthTime: 0,
+    spawnCount: 0,
+    lastSpawnOniTime: 0,
+    player: { x: 80, y: 80, radius: 11, baseSpeed: 270, dirX: 1, dirY: 0, animFrame: 0 },
+    onis: [],
+    warnings: [],
+    heldItem: null,
+    acorns: [],
+    boxes: [],
+    stars: [],
+    bananas: [],
+    particles: [],
+    keys: {},
+    touchVector: { x: 0, y: 0 } // スマホジョイスティック用の移動ベクトル
+};
+
+let animFrameId = null;
+let lastTime = performance.now();
+
+const RANKING_KEY = 'park_escape_v8_ranking';
+
+// スマホ判定
+const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+window.addEventListener('DOMContentLoaded', () => {
+    canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+
+    window.addEventListener('keydown', e => {
+        let key = e.key.toLowerCase();
+        gameState.keys[key] = true;
+        if (key === 'p') useHeldItem();
+    });
+
+    window.addEventListener('keyup', e => {
+        gameState.keys[e.key.toLowerCase()] = false;
+    });
+
+    if (isMobile) {
+        setupTouchControls();
+    }
+
+    displayRanking();
+});
+
+// タッチジョイスティックの設定
+function setupTouchControls() {
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickStick = document.getElementById('joystick-stick');
+    joystickZone.style.display = 'block';
+
+    let touchId = null;
+    let basePos = { x: 0, y: 0 };
+
+    window.addEventListener('touchstart', e => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            let touch = e.changedTouches[i];
+            // 画面左側をタッチした場合にジョイスティック操作開始
+            if (touch.clientX < window.innerWidth / 2 && touchId === null) {
+                touchId = touch.identifier;
+                basePos = { x: touch.clientX, y: touch.clientY };
+            }
+        }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', e => {
+        if (touchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            let touch = e.changedTouches[i];
+            if (touch.identifier === touchId) {
+                let dx = touch.clientX - basePos.x;
+                let dy = touch.clientY - basePos.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                let maxDist = 45;
+
+                if (dist > maxDist) {
+                    dx = (dx / dist) * maxDist;
+                    dy = (dy / dist) * maxDist;
+                }
+
+                joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
+                gameState.touchVector = { x: dx / maxDist, y: dy / maxDist };
+            }
+        }
+    }, { passive: false });
+
+    const endTouch = e => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchId) {
+                touchId = null;
+                joystickStick.style.transform = 'translate(0px, 0px)';
+                gameState.touchVector = { x: 0, y: 0 };
+            }
+        }
+    };
+
+    window.addEventListener('touchend', endTouch);
+    window.addEventListener('touchcancel', endTouch);
+}
+
+function displayRanking() {
+    let ranking = JSON.parse(localStorage.getItem(RANKING_KEY) || '[]');
+    let container1 = document.getElementById('ranking-list-container');
+    let container2 = document.getElementById('gameover-ranking-list-container');
+    
+    let html = '';
+    if (ranking.length === 0) {
+        html = '<li class="ranking-item">記録なし</li>';
+    } else {
+        ranking.slice(0, 5).forEach((item, index) => {
+            html += `<li class="ranking-item ${index === 0 ? 'top1' : ''}">
+                <span>${index + 1}. ${item.score}個 (${item.time}s)</span><span>${item.date}</span>
+            </li>`;
+        });
+    }
+
+    if (container1) container1.innerHTML = html;
+    if (container2) container2.innerHTML = html;
+}
+
+function saveScore(score, time) {
+    let ranking = JSON.parse(localStorage.getItem(RANKING_KEY) || '[]');
+    let now = new Date();
+    let dateStr = `${now.getMonth() + 1}/${now.getDate()}`;
+
+    ranking.push({ score, time: Math.floor(time), date: dateStr });
+    ranking.sort((a, b) => b.score - a.score || b.time - a.time);
+    ranking = ranking.slice(0, 5);
+
+    localStorage.setItem(RANKING_KEY, JSON.stringify(ranking));
+}
+
+function startGame() {
+    if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+    }
+
+    document.getElementById('start-modal').classList.add('hidden');
+    document.getElementById('gameover-modal').classList.add('hidden');
+
+    gameState.player = { x: 80, y: 80, radius: 11, baseSpeed: 270, dirX: 1, dirY: 0, animFrame: 0 };
+    gameState.onis = [{
+        x: 640, y: 440, radius: 14, baseSpeed: 155, type: 'chaser', stun: 0, respawnInvincible: 0, color: '#e74c3c'
+    }];
+
+    gameState.warnings = [];
+    gameState.bananas = [];
+    gameState.particles = [];
+    gameState.acorns = [];
+    gameState.boxes = [];
+    gameState.stars = [];
+    gameState.score = 0;
+    gameState.time = 0;
+    gameState.feverTime = 0;
+    gameState.speedBoostTime = 0;
+    gameState.stealthTime = 0;
+    gameState.spawnCount = 0;
+    gameState.lastSpawnOniTime = 0;
+    gameState.heldItem = null;
+    gameState.keys = {};
+    gameState.touchVector = { x: 0, y: 0 };
+
+    initCollectibles();
+    updateItemBtnUI();
+
+    lastTime = performance.now();
+    gameState.running = true;
+    animFrameId = requestAnimationFrame(gameLoop);
+}
+
+function initCollectibles() {
+    for (let i = 0; i < 20; i++) spawnAcorn();
+    for (let i = 0; i < 2; i++) spawnBox();
+}
+
+function spawnAcorn() {
+    let pos = getRandomFreePos();
+    gameState.acorns.push({ x: pos.x, y: pos.y, pulse: Math.random() * Math.PI * 2, isAttracted: false });
+}
+
+function spawnBox() {
+    let pos = getRandomFreePos();
+    gameState.boxes.push({ x: pos.x, y: pos.y, rot: 0 });
+}
+
+function getRandomFreePos() {
+    let x, y, collision;
+    do {
+        x = 40 + Math.random() * 640;
+        y = 40 + Math.random() * 440;
+        collision = OBSTACLES.some(o => hypot(x - o.x, y - o.y) < o.radius + 24);
+    } while (collision);
+    return { x, y };
+}
+
+function gameLoop(now) {
+    let dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    if (dt > 0.1) dt = 0.033;
+
+    if (gameState.running) {
+        update(dt);
+        render();
+    }
+    
+    animFrameId = requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    gameState.time += dt;
+
+    if (gameState.feverTime > 0) gameState.feverTime -= dt;
+    if (gameState.speedBoostTime > 0) gameState.speedBoostTime -= dt;
+    if (gameState.stealthTime > 0) gameState.stealthTime -= dt;
+
+    if (gameState.time - gameState.lastSpawnOniTime > 15) {
+        gameState.lastSpawnOniTime = gameState.time;
+        gameState.spawnCount++;
+        triggerOniSpawnWarning();
+    }
+
+    gameState.warnings.forEach((w, idx) => {
+        w.timer -= dt;
+        if (w.timer <= 0) {
+            spawnNewOniAt(w.x, w.y, w.isRandomType);
+            gameState.warnings.splice(idx, 1);
+        }
+    });
+
+    let p = gameState.player;
+    let dx = 0, dy = 0;
+
+    // キーボード入力
+    if (gameState.keys['w'] || gameState.keys['arrowup']) dy -= 1;
+    if (gameState.keys['s'] || gameState.keys['arrowdown']) dy += 1;
+    if (gameState.keys['a'] || gameState.keys['arrowleft']) dx -= 1;
+    if (gameState.keys['d'] || gameState.keys['arrowright']) dx += 1;
+
+    // スマホのタッチ入力と統合
+    if (gameState.touchVector.x !== 0 || gameState.touchVector.y !== 0) {
+        dx = gameState.touchVector.x;
+        dy = gameState.touchVector.y;
+    } else if (dx !== 0 && dy !== 0) {
+        dx *= 0.7071; dy *= 0.7071;
+    }
+
+    if (dx !== 0 || dy !== 0) {
+        p.dirX = dx; p.dirY = dy;
+        p.animFrame += dt * 10;
+        if (Math.random() < 0.3) {
+            addParticle(p.x, p.y + 8, 'rgba(255,255,255,0.2)', 3, 0.4);
+        }
+    }
+
+    let globalSpeedBonus = Math.min(80, gameState.time * 1.0);
+    let currentSpeed = (p.baseSpeed + globalSpeedBonus) * ((gameState.speedBoostTime > 0) ? 1.4 : 1.0);
+    moveWithObstacleCollision(p, dx * currentSpeed * dt, dy * currentSpeed * dt);
+
+    // Oni AI
+    gameState.onis.forEach(oni => {
+        if (oni.respawnInvincible > 0) {
+            oni.respawnInvincible -= dt;
+            return;
+        }
+
+        if (oni.stun > 0) {
+            oni.stun -= dt;
+            return;
+        }
+
+        let currentOniSpeed = (oni.baseSpeed + globalSpeedBonus * 0.75) * dt;
+
+        if (gameState.stealthTime > 0 && gameState.feverTime <= 0) {
+            oni.randomTimer = (oni.randomTimer || 0) - dt;
+            if (oni.randomTimer <= 0) {
+                oni.randomTimer = 1.0 + Math.random() * 1.5;
+                oni.randomVx = (Math.random() - 0.5) * currentOniSpeed * 1.5;
+                oni.randomVy = (Math.random() - 0.5) * currentOniSpeed * 1.5;
+            }
+            moveWithObstacleCollision(oni, oni.randomVx, oni.randomVy);
+            return;
+        }
+
+        if (gameState.feverTime > 0) {
+            let escapeAngle = Math.atan2(oni.y - p.y, oni.x - p.x);
+            let fleeVx = Math.cos(escapeAngle) * currentOniSpeed;
+            let fleeVy = Math.sin(escapeAngle) * currentOniSpeed;
+            moveWithObstacleCollision(oni, fleeVx, fleeVy);
+            return;
+        }
+
+        if (oni.type === 'random') {
+            oni.randomTimer = (oni.randomTimer || 0) - dt;
+            if (oni.randomTimer <= 0) {
+                oni.randomTimer = 1.5 + Math.random() * 2.5;
+                oni.randomVx = (Math.random() - 0.5) * currentOniSpeed * 1.8;
+                oni.randomVy = (Math.random() - 0.5) * currentOniSpeed * 1.8;
+                if (Math.random() < 0.25) { oni.randomVx = 0; oni.randomVy = 0; }
+            }
+            moveWithObstacleCollision(oni, oni.randomVx, oni.randomVy);
+            return;
+        }
+
+        let directAngle = Math.atan2(p.y - oni.y, p.x - oni.x);
+        let bestVx = Math.cos(directAngle) * currentOniSpeed;
+        let bestVy = Math.sin(directAngle) * currentOniSpeed;
+
+        if (checkObstacleCollision(oni.x + bestVx, oni.y + bestVy, oni.radius)) {
+            let minDistance = Infinity;
+            let chosenVx = 0, chosenVy = 0;
+
+            for (let offsetAngle = -Math.PI / 2; offsetAngle <= Math.PI / 2; offsetAngle += Math.PI / 8) {
+                let testAngle = directAngle + offsetAngle;
+                let testVx = Math.cos(testAngle) * currentOniSpeed;
+                let testVy = Math.sin(testAngle) * currentOniSpeed;
+                let nextX = oni.x + testVx;
+                let nextY = oni.y + testVy;
+
+                if (!checkObstacleCollision(nextX, nextY, oni.radius)) {
+                    let distToPlayer = hypot(p.x - nextX, p.y - nextY);
+                    if (distToPlayer < minDistance) {
+                        minDistance = distToPlayer;
+                        chosenVx = testVx;
+                        chosenVy = testVy;
+                    }
+                }
+            }
+            bestVx = chosenVx;
+            bestVy = chosenVy;
+        }
+
+        moveWithObstacleCollision(oni, bestVx, bestVy);
+    });
+
+    // Bananas
+    gameState.bananas.forEach((b, idx) => {
+        gameState.onis.forEach(oni => {
+            if (hypot(oni.x - b.x, oni.y - b.y) < oni.radius + 10) {
+                oni.stun = 3.0;
+                burstParticles(b.x, b.y, '#f1c40f', 12);
+                gameState.bananas.splice(idx, 1);
+            }
+        });
+    });
+
+    // Acorns
+    gameState.acorns.forEach((a, index) => {
+        a.pulse += dt * 5;
+
+        if (a.isAttracted) {
+            let angle = Math.atan2(p.y - a.y, p.x - a.x);
+            let pullSpeed = 600 * dt;
+            a.x += Math.cos(angle) * pullSpeed;
+            a.y += Math.sin(angle) * pullSpeed;
+        }
+
+        if (hypot(p.x - a.x, p.y - a.y) < p.radius + 8) {
+            gameState.score++;
+            burstParticles(a.x, a.y, '#f39c12', 8);
+            gameState.acorns.splice(index, 1);
+            spawnAcorn();
+        }
+    });
+
+    // Boxes
+    gameState.boxes.forEach((box, index) => {
+        box.rot += dt * 2;
+        if (hypot(p.x - box.x, p.y - box.y) < p.radius + 14) {
+            if (!gameState.heldItem) {
+                let pool = [ITEMS.BANANA, ITEMS.SHOES, ITEMS.MEGAPHONE, ITEMS.CLOAK, ITEMS.MAGNET];
+                gameState.heldItem = pool[Math.floor(Math.random() * pool.length)];
+                updateItemBtnUI();
+                burstParticles(box.x, box.y, '#3498db', 15);
+            }
+            gameState.boxes.splice(index, 1);
+            setTimeout(spawnBox, 6000);
+        }
+    });
+
+    // Stars
+    if (Math.random() < 0.0006 && gameState.stars.length === 0) {
+        let pos = getRandomFreePos();
+        gameState.stars.push({ x: pos.x, y: pos.y });
+    }
+
+    gameState.stars.forEach((s, index) => {
+        if (hypot(p.x - s.x, p.y - s.y) < p.radius + 12) {
+            gameState.feverTime = 6.5;
+            burstParticles(s.x, s.y, '#f1c40f', 20);
+            gameState.stars.splice(index, 1);
+        }
+    });
+
+    // Oni collisions
+    if (gameState.stealthTime <= 0) {
+        gameState.onis.forEach(oni => {
+            if (oni.respawnInvincible > 0) return;
+
+            if (hypot(p.x - oni.x, p.y - oni.y) < p.radius + oni.radius) {
+                if (gameState.feverTime > 0) {
+                    oni.x = 640; 
+                    oni.y = 440; 
+                    oni.stun = 0;
+                    oni.respawnInvincible = 3.0;
+                    gameState.score += 10;
+                    burstParticles(p.x, p.y, '#f1c40f', 25);
+                } else {
+                    triggerGameOver();
+                }
+            }
+        });
+    }
+
+    // Particle update
+    gameState.particles.forEach((pt, idx) => {
+        pt.x += pt.vx; pt.y += pt.vy;
+        pt.life -= dt;
+        if (pt.life <= 0) gameState.particles.splice(idx, 1);
+    });
+
+    updateHUD();
+}
+
+function triggerOniSpawnWarning() {
+    let pos = getRandomFreePos();
+    let isRandomType = (gameState.spawnCount >= 2) && (Math.random() < 0.55);
+    gameState.warnings.push({ x: pos.x, y: pos.y, timer: 2.0, isRandomType });
+}
+
+function spawnNewOniAt(x, y, isRandomType) {
+    gameState.onis.push({
+        x, y,
+        radius: isRandomType ? 11 : 10,
+        baseSpeed: isRandomType ? 180 : 165,
+        type: isRandomType ? 'random' : 'chaser',
+        stun: 0,
+        respawnInvincible: 0,
+        color: isRandomType ? '#e67e22' : '#e74c3c',
+        randomTimer: 0, randomVx: 0, randomVy: 0
+    });
+    burstParticles(x, y, isRandomType ? '#e67e22' : '#e74c3c', 20);
+}
+
+function useHeldItem() {
+    if (!gameState.running || !gameState.heldItem) return;
+
+    let item = gameState.heldItem;
+    let p = gameState.player;
+
+    if (item.id === 'BANANA') {
+        gameState.bananas.push({ x: p.x, y: p.y });
+    } else if (item.id === 'SHOES') {
+        gameState.speedBoostTime = 3.5;
+        burstParticles(p.x, p.y, '#2ecc71', 15);
+    } else if (item.id === 'MEGAPHONE') {
+        burstParticles(p.x, p.y, '#e74c3c', 30);
+        gameState.onis.forEach(oni => {
+            if (hypot(p.x - oni.x, p.y - oni.y) < 160) {
+                let pushAngle = Math.atan2(oni.y - p.y, oni.x - p.x);
+                oni.x += Math.cos(pushAngle) * 140;
+                oni.y += Math.sin(pushAngle) * 140;
+                oni.stun = 1.8;
+            }
+        });
+    } else if (item.id === 'CLOAK') {
+        gameState.stealthTime = 4.0;
+        burstParticles(p.x, p.y, '#9b59b6', 15);
+    } else if (item.id === 'MAGNET') {
+        gameState.acorns.forEach(a => {
+            a.isAttracted = true;
+        });
+        burstParticles(p.x, p.y, '#f1c40f', 25);
+    }
+
+    gameState.heldItem = null;
+    updateItemBtnUI();
+}
+
+function updateItemBtnUI() {
+    let iconEl = document.getElementById('item-btn-icon');
+    let labelEl = document.getElementById('item-btn-label');
+    if (gameState.heldItem) {
+        iconEl.innerText = gameState.heldItem.icon;
+        labelEl.innerText = gameState.heldItem.name;
+    } else {
+        iconEl.innerText = '📦';
+        labelEl.innerText = 'P / TAP';
+    }
+}
+
+function moveWithObstacleCollision(obj, vx, vy) {
+    let nextX = obj.x + vx;
+    let nextY = obj.y + vy;
+
+    if (!checkObstacleCollision(nextX, obj.y, obj.radius)) obj.x = nextX;
+    if (!checkObstacleCollision(obj.x, nextY, obj.radius)) obj.y = nextY;
+
+    obj.x = Math.max(obj.radius, Math.min(720 - obj.radius, obj.x));
+    obj.y = Math.max(obj.radius, Math.min(520 - obj.radius, obj.y));
+}
+
+function checkObstacleCollision(x, y, radius) {
+    return OBSTACLES.some(o => hypot(x - o.x, y - o.y) < radius + o.radius);
+}
+
+function addParticle(x, y, color, size, life) {
+    gameState.particles.push({
+        x, y, color, size, life,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: (Math.random() - 0.5) * 1.5
+    });
+}
+
+function burstParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let speed = 1 + Math.random() * 4;
+        gameState.particles.push({
+            x, y, color,
+            size: 2 + Math.random() * 3,
+            life: 0.3 + Math.random() * 0.4,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed
+        });
+    }
+}
+
+function updateHUD() {
+    document.getElementById('score-text').innerText = gameState.score;
+    document.getElementById('time-text').innerText = `${Math.floor(gameState.time)}s`;
+
+    let statusEl = document.getElementById('status-text');
+    if (gameState.feverTime > 0) {
+        statusEl.innerText = `🌟 STAR FEVER (${Math.ceil(gameState.feverTime)}s)`;
+        statusEl.style.color = '#f1c40f';
+    } else if (gameState.stealthTime > 0) {
+        statusEl.innerText = `✨ STEALTH (${Math.ceil(gameState.stealthTime)}s)`;
+        statusEl.style.color = '#9b59b6';
+    } else if (gameState.speedBoostTime > 0) {
+        statusEl.innerText = `👟 SPEED UP`;
+        statusEl.style.color = '#2ecc71';
+    } else if (gameState.warnings.length > 0) {
+        statusEl.innerText = `⚠️ WARNING`;
+        statusEl.style.color = '#e74c3c';
+    } else {
+        statusEl.innerText = `RUN & ESCAPE`;
+        statusEl.style.color = '#2ecc71';
+    }
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#14231a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = 'rgba(46, 204, 113, 0.05)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+
+    OBSTACLES.forEach(o => {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 4;
+
+        if (o.type === 'tree') {
+            ctx.fillStyle = '#1b4332';
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#2d6a4f';
+            ctx.beginPath(); ctx.arc(o.x - 4, o.y - 4, o.radius * 0.75, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#40916c';
+            ctx.beginPath(); ctx.arc(o.x - 8, o.y - 8, o.radius * 0.45, 0, Math.PI * 2); ctx.fill();
+        } else if (o.type === 'gym') {
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(o.x - 22, o.y - 22, 44, 44);
+            ctx.strokeRect(o.x - 12, o.y - 12, 24, 24);
+        } else if (o.type === 'bench') {
+            ctx.fillStyle = '#d35400';
+            ctx.beginPath(); ctx.roundRect(o.x - 20, o.y - 10, 40, 20, 6); ctx.fill();
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(o.x - 16, o.y - 6, 32, 12);
+        }
+        ctx.restore();
+    });
+
+    gameState.warnings.forEach(w => {
+        let pulse = 14 + Math.sin(performance.now() * 0.012) * 5;
+        ctx.save();
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.25)';
+        ctx.beginPath(); ctx.arc(w.x, w.y, pulse * 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '900 18px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('⚠️', w.x, w.y);
+        ctx.restore();
+    });
+
+    gameState.bananas.forEach(b => {
+        ctx.font = '18px sans-serif';
+        ctx.fillText('🍌', b.x - 9, b.y + 6);
+    });
+
+    gameState.boxes.forEach(box => {
+        ctx.save();
+        ctx.translate(box.x, box.y);
+        ctx.rotate(Math.sin(box.rot) * 0.15);
+        ctx.font = '20px sans-serif';
+        ctx.fillText('📦', -10, 7);
+        ctx.restore();
+    });
+
+    gameState.acorns.forEach(a => {
+        let bounce = Math.sin(a.pulse) * 3;
+        ctx.save();
+        ctx.shadowColor = '#f39c12';
+        ctx.shadowBlur = 8;
+        ctx.font = '16px sans-serif';
+        ctx.fillText('🌰', a.x - 8, a.y + 5 + bounce);
+        ctx.restore();
+    });
+
+    gameState.stars.forEach(s => {
+        ctx.save();
+        ctx.shadowColor = '#f1c40f';
+        ctx.shadowBlur = 12;
+        ctx.font = '20px sans-serif';
+        ctx.fillText('🌟', s.x - 10, s.y + 7);
+        ctx.restore();
+    });
+
+    gameState.particles.forEach(pt => {
+        ctx.save();
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    });
+
+    gameState.onis.forEach(oni => {
+        ctx.save();
+
+        if (oni.respawnInvincible > 0) {
+            let blink = Math.sin(performance.now() * 0.03) > 0;
+            ctx.globalAlpha = blink ? 0.25 : 0.55;
+        }
+
+        ctx.shadowColor = oni.stun > 0 ? '#95a5a6' : oni.color;
+        ctx.shadowBlur = 12;
+
+        let renderColor = (oni.stun > 0) ? '#95a5a6' : (gameState.feverTime > 0) ? '#3498db' : oni.color;
+        ctx.fillStyle = renderColor;
+        ctx.beginPath(); ctx.arc(oni.x, oni.y, oni.radius, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(oni.x - 4, oni.y - 3, 3, 0, Math.PI * 2);
+        ctx.arc(oni.x + 4, oni.y - 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(oni.x - 4, oni.y - 3, 1.5, 0, Math.PI * 2);
+        ctx.arc(oni.x + 4, oni.y - 3, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+
+    let p = gameState.player;
+    ctx.save();
+    if (gameState.stealthTime > 0) ctx.globalAlpha = 0.35;
+
+    let pColor = (gameState.feverTime > 0) ? '#f1c40f' : '#2ecc71';
+    ctx.shadowColor = pColor;
+    ctx.shadowBlur = 15;
+
+    ctx.fillStyle = pColor;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+
+    ctx.beginPath(); ctx.arc(p.x - 7, p.y - 9, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x + 7, p.y - 9, 4, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(p.x - 3, p.y - 2, 2.5, 0, Math.PI * 2);
+    ctx.arc(p.x + 3, p.y - 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(p.x - 3, p.y - 2, 1, 0, Math.PI * 2);
+    ctx.arc(p.x + 3, p.y - 2, 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function hypot(dx, dy) { return Math.sqrt(dx * dx + dy * dy); }
+
+function triggerGameOver() {
+    gameState.running = false;
+    saveScore(gameState.score, gameState.time);
+
+    document.getElementById('gameover-stats').innerHTML = `
+        回収どんぐり: <b style="color:var(--gold);">${gameState.score}</b> 個<br>
+        生存時間: <b>${Math.floor(gameState.time)}</b> 秒 (鬼: ${gameState.onis.length}体)
+    `;
+
+    displayRanking();
+    document.getElementById('gameover-modal').classList.remove('hidden');
+}
+</script>
+</body>
+</html>
